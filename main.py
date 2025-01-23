@@ -1,12 +1,14 @@
 import glob
 import io
-import pythoncom
+from email import encoders
+from email.mime.base import MIMEBase
+from email.mime.multipart import MIMEMultipart
 import streamlit as st
 import pandas as pd
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 from datetime import date
+import smtplib
 import os
-import win32com.client as win32
 
 today=date.today()
 onFirstDataRendered = JsCode("""
@@ -15,16 +17,20 @@ parmas.api.onFilterChanged();
 """)
 
 
-#if 'disabled' not in st.session_state:
+
+
+# if 'disabled' not in st.session_state:
 #    st.session_state.disabled = True
-#def disable():
+# def disable():
 #    st.session_state.disabled = False
+
 username=st.text_input("Enter Username")
 password=st.text_input("Enter Password",type='password')
 button=st.button("Upload")
-send_email_to=st.text_input('Enter EmailAddress: ',value='yousufsyed900@gmail.com',disabled=True)
-send_button=st.button("Send Email")
-if (username=='yousuf' and password=='abc') or (username=='yousuf1' and password=='abcs'):
+# send_email_to=st.text_input('Enter EmailAddress: ',disabled=True)
+
+if ((username==st.secrets.get('user1') and password==st.secrets.get('password1'))
+        or (username==st.secrets.get('user2') and password==st.secrets.get('password2'))):
     st.toast("Login Successfully")
     uploaded_file = st.file_uploader("Choose a file",key="uploader")
     if uploaded_file is not None:
@@ -59,21 +65,40 @@ if (username=='yousuf' and password=='abc') or (username=='yousuf1' and password
 
 elif username=='' and password=='':
     st.toast("Kindly Enter Data")
-elif (username!='yousuf' or password!='abc') and (username!='yousuf1' or password!='abcs'):
+elif ((username!=st.secrets.get('user1') or password!=st.secrets.get('password1'))
+      and (username!=st.secrets.get('user2') or password!=st.secrets.get('password2'))):
     st.toast("Invalid Credentials")
 
 
-
+send_button=st.button("Send Email")
 if send_button:
     print("inside")
-    olApp = win32.Dispatch('Outlook.Application',pythoncom.CoInitialize())
-    olNS = olApp.GetNameSpace('MAPI')
-
-    # construct the email item object
-    mailItem = olApp.CreateItem(0)
-    mailItem.To = send_email_to
-    list_of_files = glob.glob('C:\\Users\\SAP User 1\\Downloads\\*')
+    list_of_files = glob.glob(f'C:\\Users\\{os.getlogin()}\\Downloads\\*')
     latest_file = max(list_of_files, key=os.path.getctime)
-    print(latest_file)
-    mailItem.Attachments.Add(latest_file)
-    mailItem.Send()
+    sender = st.secrets.get('email_from')
+    recipient = st.secrets.get('email_to')
+
+    message = MIMEMultipart()
+    filename = latest_file
+
+    with open(filename, "rb") as attachment:
+
+        # Add file as application/octet-stream
+        # Email client can usually download this automatically as attachment
+        part = MIMEBase("application", "octet-stream")
+        part.set_payload(attachment.read())
+    # Encode file in ASCII characters to send by email
+    encoders.encode_base64(part)
+    # Add header as key/value pair to attachment part
+    part.add_header(
+        "Content-Disposition",
+        f"attachment; filename= {filename.split('\\')[-1]}",
+    )
+    message.attach(part)
+
+    smtp = smtplib.SMTP("mail.group-ge.com", port=587)
+    smtp.starttls()
+    smtp.login(sender,st.secrets.get('email_pass'))
+    smtp.sendmail(sender, recipient, message.as_string())
+    smtp.quit()
+
