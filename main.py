@@ -1,8 +1,11 @@
 import glob
 import io
 from email import encoders
+from email.mime.application import MIMEApplication
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
 import streamlit as st
 import pandas as pd
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
@@ -52,12 +55,27 @@ if ((username==st.secrets.get('user1') and password==st.secrets.get('password1')
             writer.close()
             processed_data = output.getvalue()
             return processed_data
+        send_button = st.button("Send Email")
+        if send_button:
+            sender = st.secrets.get('email_from')
+            recipient = st.secrets.get('email_to')
+            multipart = MIMEMultipart()
+            multipart["From"] = sender
+            multipart["To"] = recipient
+            attachment = MIMEApplication(to_excel(selected_df))
+            attachment["Content-Disposition"] = 'attachment; filename=" {}"'.format(f"{today}.xlsx")
+            multipart.attach(attachment)
+            server = smtplib.SMTP("mail.group-ge.com", 587)
+            server.starttls()
+            server.login(sender, st.secrets.get('email_pass'))
+            server.sendmail(sender, recipient, multipart.as_string())
+            server.quit()
         try:
             button = st.download_button(
-                "Download as excel",
-                data=to_excel(selected_df),
-                file_name=f'{today}.xlsx',
-                mime="application/vnd.ms-excel",
+            "Download as excel",
+            data=to_excel(selected_df),
+            file_name=f'{today}.xlsx',
+            mime="application/vnd.ms-excel",
             )
         except:
             st.error("Select Data")
@@ -70,35 +88,33 @@ elif ((username!=st.secrets.get('user1') or password!=st.secrets.get('password1'
     st.toast("Invalid Credentials")
 
 
-send_button=st.button("Send Email")
-if send_button:
-    print("inside")
-    list_of_files = glob.glob(f'C:\\Users\\{os.getlogin()}\\Downloads\\*')
-    latest_file = max(list_of_files, key=os.path.getctime)
-    sender = st.secrets.get('email_from')
-    recipient = st.secrets.get('email_to')
 
-    message = MIMEMultipart()
-    filename = latest_file
-
-    with open(filename, "rb") as attachment:
-
-        # Add file as application/octet-stream
-        # Email client can usually download this automatically as attachment
-        part = MIMEBase("application", "octet-stream")
-        part.set_payload(attachment.read())
-    # Encode file in ASCII characters to send by email
-    encoders.encode_base64(part)
-    # Add header as key/value pair to attachment part
-    part.add_header(
-        "Content-Disposition",
-        f"attachment; filename= {filename.split('\\')[-1]}",
-    )
-    message.attach(part)
-
-    smtp = smtplib.SMTP("mail.group-ge.com", port=587)
-    smtp.starttls()
-    smtp.login(sender,st.secrets.get('email_pass'))
-    smtp.sendmail(sender, recipient, message.as_string())
-    smtp.quit()
-
+# if send_button:
+    # list_of_files = glob.glob(f'C:\\Users\\{os.getlogin()}\\Downloads\\*')
+    # latest_file = max(list_of_files, key=os.path.getctime)
+    # sender = st.secrets.get('email_from')
+    # recipient = st.secrets.get('email_to')
+    #
+    # message = MIMEMultipart()
+    # filename = latest_file
+    #
+    # with open(filename, "rb") as attachment:
+    #
+    #     # Add file as application/octet-stream
+    #     # Email client can usually download this automatically as attachment
+    #     part = MIMEBase("application", "octet-stream")
+    #     part.set_payload(attachment.read())
+    # # Encode file in ASCII characters to send by email
+    # encoders.encode_base64(part)
+    # # Add header as key/value pair to attachment part
+    # part.add_header(
+    #     "Content-Disposition",
+    #     f"attachment; filename= {filename.split('\\')[-1]}",
+    # )
+    # message.attach(part)
+    #
+    # smtp = smtplib.SMTP("mail.group-ge.com", port=587)
+    # smtp.starttls()
+    # smtp.login(sender,st.secrets.get('email_pass'))
+    # smtp.sendmail(sender, recipient, message.as_string())
+    # smtp.quit()
