@@ -37,43 +37,50 @@ if ((username==st.secrets.get('user1') and password==st.secrets.get('password1')
     st.toast("Login Successfully")
     uploaded_file = st.file_uploader("Choose a file",key="uploader")
     if uploaded_file is not None:
-        dataframe = pd.read_excel(uploaded_file)
-        dataframe['DocDate'] = dataframe['DocDate'].astype('datetime64[ns]')
-        dataframe['DocDueDate'] = dataframe['DocDate'].astype('datetime64[ns]')
-        gb = GridOptionsBuilder.from_dataframe(dataframe, onFirstDataRendered=onFirstDataRendered)
+        dataframe_original = pd.read_excel(uploaded_file)
+        dataframe_original['DocDate'] = dataframe_original['DocDate'].astype('datetime64[ns]')
+        dataframe_original['DocDueDate'] = dataframe_original['DocDate'].astype('datetime64[ns]')
+        gb = GridOptionsBuilder.from_dataframe(dataframe_original, onFirstDataRendered=onFirstDataRendered)
         gb.configure_default_column(editable=True, filter=True)
         gb.configure_selection('multiple', use_checkbox=True, groupSelectsChildren=True,
                                groupSelectsFiltered=True)
         gridOptions = gb.build()
-        grid_response = AgGrid(dataframe, gridOptions, allow_unsafe_jscode=True)
+        grid_response = AgGrid(dataframe_original, gridOptions, allow_unsafe_jscode=True)
         out_df = grid_response["data"]
         selected_df = grid_response.selected_rows
-        def to_excel(selected_df) -> bytes:
+        try:
+            selected_df_to_download=dataframe_original[~dataframe_original['#'].isin(selected_df['#'])]
+        except:
+            print("Select Data")
+        def to_excel(selected_df_to_download) -> bytes:
             output = io.BytesIO()
             writer = pd.ExcelWriter(output, engine="xlsxwriter")
-            selected_df.to_excel(writer, sheet_name="Sheet1", index=False)
+            selected_df_to_download.to_excel(writer, sheet_name="Sheet1", index=False)
             writer.close()
             processed_data = output.getvalue()
             return processed_data
         send_button = st.button("Send Email")
         if send_button:
-            sender = st.secrets.get('email_from')
-            recipient = st.secrets.get('email_to')
-            multipart = MIMEMultipart()
-            multipart["From"] = sender
-            multipart["To"] = recipient
-            attachment = MIMEApplication(to_excel(selected_df))
-            attachment["Content-Disposition"] = 'attachment; filename=" {}"'.format(f"{today}.xlsx")
-            multipart.attach(attachment)
-            server = smtplib.SMTP("mail.group-ge.com", 587)
-            server.starttls()
-            server.login(sender, st.secrets.get('email_pass'))
-            server.sendmail(sender, recipient, multipart.as_string())
-            server.quit()
+            try:
+                sender = st.secrets.get('email_from')
+                recipient = st.secrets.get('email_to')
+                multipart = MIMEMultipart()
+                multipart["From"] = sender
+                multipart["To"] = recipient
+                attachment = MIMEApplication(to_excel(selected_df))
+                attachment["Content-Disposition"] = 'attachment; filename=" {}"'.format(f"{today}.xlsx")
+                multipart.attach(attachment)
+                server = smtplib.SMTP("mail.group-ge.com", 587)
+                server.starttls()
+                server.login(sender, st.secrets.get('email_pass'))
+                server.sendmail(sender, recipient, multipart.as_string())
+                server.quit()
+            except:
+                print("__")
         try:
             button = st.download_button(
             "Download as excel",
-            data=to_excel(selected_df),
+            data=to_excel(selected_df_to_download),
             file_name=f'{today}.xlsx',
             mime="application/vnd.ms-excel",
             )
@@ -118,3 +125,4 @@ elif ((username!=st.secrets.get('user1') or password!=st.secrets.get('password1'
     # smtp.login(sender,st.secrets.get('email_pass'))
     # smtp.sendmail(sender, recipient, message.as_string())
     # smtp.quit()
+
